@@ -12,6 +12,7 @@ import imutils
 import time
 import cv2
 from tracker_utils import bbox_to_centroid
+import sort_test
 
 
 class Sort:
@@ -25,10 +26,7 @@ class Sort:
         if source == 'stream':
             self.init_stream()
         if source == 'test':
-            self.init_test()
-
-    def init_test(self):
-        pass
+            sort_test.main()
 
     def init_detector(self):
         # load our serialized model from disk

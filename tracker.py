@@ -4,10 +4,9 @@ from track import Track
 from scipy.optimize import linear_sum_assignment
 
 
-
 class Tracker:
 
-    def __init__(self, metric='iou', matching_threshold=0.3, max_disappeared=3):
+    def __init__(self, metric='iou', matching_threshold=0.3, max_disappeared=10):
         """ initialize the next unique object ID along with two ordered dictionaries,
         used to keep track of mapping a given object ID to its centroid and
         number of consecutive frames it has been marked as "disappeared", respectively

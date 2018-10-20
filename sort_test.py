@@ -6,15 +6,15 @@ A module for testing SORT operation with the MOT benchmark
 
 from __future__ import print_function
 import os.path
-import matplotlib.pyplot as plt
-import matplotlib.patches as patches
-from skimage import io
 from tracker import Tracker
 import numpy as np
-from sort import Sort
+import cv2
+from tracker_utils import bbox_to_centroid
+import random
+import colorsys
 
 
-class SortTest(Sort):
+class SortTest:
 
     def __init__(self, seq):
         """ Sets key parameters for SortTest """
@@ -25,7 +25,7 @@ class SortTest(Sort):
     @staticmethod
     def show_source(seq, frame, phase='train'):
         """ Method for displaying the origin video being tracked """
-        return io.imread('mot_benchmark/%s/%s/img1/%06d.jpg' % (phase, seq, frame))
+        return cv2.imread('mot_benchmark/%s/%s/img1/%06d.jpg' % (phase, seq, frame))
 
     @staticmethod
     def check_data_path():
@@ -52,36 +52,39 @@ class SortTest(Sort):
         """
         Applies the SORT tracker on sequence input, plots image with bounding box for each frame
         """
-
+        # Load pre-made detections for .txt file (from MOT benchmark)
         file_path = 'data/%s/det.txt' % self.seq
         self.load_detections(file_path)
-        colours = np.random.rand(32, 3)
-        plt.ion()
-        fig = plt.figure()
+
+        # Generate pseudo-random colors for bounding boxes
 
         for frame_idx in range(1, int(self.detections[:, 0].max())):
             new_detections = self.detections[self.detections[:, 0] == frame_idx, 2:7]
             new_detections[:, 2:4] += new_detections[:, 0:2]  # convert to [x1,y1,w,h] to [x1,y1,x2,y2]
-
-            ax1 = fig.add_subplot(111, aspect='equal')
-            im = SortTest.show_source(self.seq, frame_idx)
-            ax1.imshow(im)
-            plt.title(self.seq + ' Tracked Targets')
+            frame = SortTest.show_source(self.seq, frame_idx)
             ids_and_tracks = self.tracker.update(new_detections[:, :4])
 
-            # Draw bounding boxes
+            # Draw bounding boxes and centroids
             for ID, bbox in ids_and_tracks:
-                b = bbox.astype(np.int32)
-                ax1.add_patch(patches.Rectangle((b[0], b[1]), b[2]-b[0], b[3]-b[1], fill=False, lw=3,
-                                                ec=colours[ID % 32, :]))
-                ax1.set_adjustable('box-forced')
+                random.seed(ID)
+                h, s, l = random.random(), 0.5 + random.random() / 2.0, 0.4 + random.random() / 5.0
+                color = [int(256 * i) for i in colorsys.hls_to_rgb(h, l, s)]
+                startX, startY, endX, endY = bbox.astype("int")
+                cv2.rectangle(frame, (startX, startY), (endX, endY),
+                              color, 2)
+                centroid = bbox_to_centroid(bbox)
+                text = "ID {}".format(ID)
+                cv2.putText(frame, text, (centroid[0] - 10, centroid[1] - 10),
+                            cv2.FONT_HERSHEY_SIMPLEX, 0.5, color, 2)
+                cv2.circle(frame, (centroid[0], centroid[1]), 4, color, -1)
 
             # Show tracked frame
-            fig.canvas.flush_events()
-            plt.draw()
-            ax1.cla()
+            cv2.imshow("Frame", frame)
 
-        plt.close(fig)
+            # if the `q` key was pressed, break from the loop
+            key = cv2.waitKey(1) & 0xFF
+            if key == ord("q"):
+                break
 
 
 def main():

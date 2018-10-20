@@ -25,13 +25,15 @@ def xxyy_to_xysr(bbox):
     return np.array([x, y, s, r]).reshape((4, 1))
 
 
-def bbox_to_centroid(detections):
-    input_centroids = np.zeros((len(detections), 2), dtype="int")
-    for (i, (startX, startY, endX, endY)) in enumerate(detections):
-        # use the bounding box coordinates to derive the centroid
-        cX = int((startX + endX) / 2.0)
-        cY = int((startY + endY) / 2.0)
-        input_centroids[i] = (cX, cY)
+def bbox_to_centroid(bbox):
+    """
+    Computes centroid of bbox in format [xmin, xmax, ymin, ymax]
+    :param bbox: (array) bounding box
+    :return: (tuple) centroid x_center, y_center
+    """
+    # use the bounding box coordinates to derive the centroid
+    cX = int((bbox[0] + bbox[2]) / 2.0)
+    cY = int((bbox[1] + bbox[3]) / 2.0)
 
-    return input_centroids
+    return cX, cY
 
