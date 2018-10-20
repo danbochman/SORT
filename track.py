@@ -14,14 +14,13 @@ class Track:
         """
         Initialises a tracked object according to initial bounding box.
         :param filter: (class Object) Filter class for enhancing association between detections and tracked objects
-        :param detection: (array) single detection in form of bounding box [X_min, Y_min, X_max, Y_max]
+        :param initial_state: (array) single detection in form of bounding box [X_min, Y_min, X_max, Y_max]
         """
-        self.state = initial_state
         if filter == 'Kalman':
             self.kf = KalmanFilter(dim_x=7, dim_z=4)
-            self.init_kalman()
+            self.init_kalman(initial_state)
 
-    def init_kalman(self):
+    def init_kalman(self, initial_state):
         """ if Kalman Filter was selected for track, this method initializes the constant velocity
         model for tracking bounding boxes by default """
         self.kf.F = np.array([[1, 0, 0, 0, 1, 0, 0],
@@ -42,7 +41,7 @@ class Track:
         self.kf.P *= 10.
         self.kf.Q[-1, -1] *= 0.01
         self.kf.Q[4:, 4:] *= 0.01
-        self.kf.x[:4] = self.state.reshape(4, 1)
+        self.kf.x[:4] = xxyy_to_xysr(initial_state)
 
     def project(self):
         return xysr_to_xxyy(self.kf.x)

@@ -72,7 +72,7 @@ class SortTest(Sort):
             # Draw bounding boxes
             for ID, bbox in ids_and_tracks:
                 b = bbox.astype(np.int32)
-                ax1.add_patch(patches.Rectangle((b[0], b[1]), b[2] - b[0], b[3] - b[1], fill=False, lw=3,
+                ax1.add_patch(patches.Rectangle((b[0], b[1]), b[2]-b[0], b[3]-b[1], fill=False, lw=3,
                                                 ec=colours[ID % 32, :]))
                 ax1.set_adjustable('box-forced')
 

@@ -1,5 +1,4 @@
 from collections import OrderedDict
-import numpy as np
 from metric import Metric
 from track import Track
 from scipy.optimize import linear_sum_assignment
@@ -8,7 +7,7 @@ from scipy.optimize import linear_sum_assignment
 
 class Tracker:
 
-    def __init__(self, metric='iou', matching_threshold=0.3, max_disappeared=50):
+    def __init__(self, metric='iou', matching_threshold=0.3, max_disappeared=3):
         """ initialize the next unique object ID along with two ordered dictionaries,
         used to keep track of mapping a given object ID to its centroid and
         number of consecutive frames it has been marked as "disappeared", respectively
@@ -81,7 +80,7 @@ class Tracker:
         D = self.metric.distance_matrix(tracked_states, detections)
 
         # Associate detections to existing trackers according to distance matrix
-        rows, cols = linear_sum_assignment(D)
+        rows, cols = linear_sum_assignment(-D)
         used_rows = set()
         used_cols = set()
         for (row, col) in zip(rows, cols):
