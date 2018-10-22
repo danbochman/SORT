@@ -29,7 +29,7 @@ class SortTest:
 
     @staticmethod
     def check_data_path():
-        ''' Validates correct implementation of symbolic link to data for SORT '''
+        """ Validates correct implementation of symbolic link to data for SORT """
         if not os.path.exists('mot_benchmark'):
             print ('''
             ERROR: mot_benchmark link not found!\n
@@ -56,8 +56,6 @@ class SortTest:
         file_path = 'data/%s/det.txt' % self.seq
         self.load_detections(file_path)
 
-        # Generate pseudo-random colors for bounding boxes
-
         for frame_idx in range(1, int(self.detections[:, 0].max())):
             new_detections = self.detections[self.detections[:, 0] == frame_idx, 2:7]
             new_detections[:, 2:4] += new_detections[:, 0:2]  # convert to [x1,y1,w,h] to [x1,y1,x2,y2]
@@ -66,6 +64,7 @@ class SortTest:
 
             # Draw bounding boxes and centroids
             for ID, bbox in ids_and_tracks:
+                # Generate pseudo-random colors for bounding boxes
                 random.seed(ID)
                 h, s, l = random.random(), 0.5 + random.random() / 2.0, 0.4 + random.random() / 5.0
                 color = [int(256 * i) for i in colorsys.hls_to_rgb(h, l, s)]
@@ -88,7 +87,7 @@ class SortTest:
 
 
 def main():
-    '''Starts the tracker on source video'''
+    """ Starts the tracker on source video """
     # Initialize the parameters for SORT
     sequences = ['PETS09-S2L1', 'TUD-Campus', 'TUD-Stadtmitte', 'ETH-Bahnhof', 'ETH-Sunnyday', 'ETH-Pedcross2',
                  'KITTI-13', 'KITTI-17', 'ADL-Rundle-6', 'ADL-Rundle-8', 'Venice-2']

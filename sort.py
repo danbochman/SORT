@@ -16,16 +16,16 @@ import sort_test
 
 
 class Sort:
-    def __init__(self, args, source='test', detector=False):
+    def __init__(self, args, mode='test', detector=False):
         self.args = args
         self.tracker = Tracker()
         self.H = None
         self.W = None
         if detector:
             self.detector = self.init_detector()
-        if source == 'stream':
+        if mode == 'stream':
             self.init_stream()
-        if source == 'test':
+        if mode == 'test':
             sort_test.main()
 
     def init_detector(self):

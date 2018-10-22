@@ -38,7 +38,7 @@ class Tracker:
     def handle_no_detections(self):
         """ This method is called when there are no new detections for the detector.
         loops over all the tracked objects, updates their 'disappeared counter',
-        and deleted objects if their counter is expired """
+        and deletes objects if their counter is expired """
         for track_id in self.disappeared.keys():
             self.disappeared[track_id] += 1
             if self.disappeared[track_id] > self.max_disappeared:
