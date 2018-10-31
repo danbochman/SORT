@@ -1,115 +1,114 @@
 #!\bin\python2.7
-# USAGE
-# python sort.py --prototxt deploy.prototxt --model res10_300x300_ssd_iter_140000.caffemodel
+
 """
-SORT: A Simple, Online and Real-Time Tracker
+A module for testing SORT operation with the MOT benchmark
 """
-from tracker import Tracker
-from imutils.video import VideoStream
+
+from __future__ import print_function
+import os.path
+from tracker import KalmanTracker, ORBTracker
 import numpy as np
-import argparse
-import imutils
-import time
 import cv2
 from tracker_utils import bbox_to_centroid
-import sort_test
+import random
+import colorsys
 
 
-class Sort:
-    def __init__(self, args, mode='test', detector=False):
-        self.args = args
-        self.tracker = Tracker()
-        self.H = None
-        self.W = None
-        if detector:
-            self.detector = self.init_detector()
-        if mode == 'stream':
-            self.init_stream()
-        if mode == 'test':
-            sort_test.main()
+class SORT:
 
-    def init_detector(self):
-        # load our serialized model from disk
-        print("[INFO] loading model...")
-        return cv2.dnn.readNetFromCaffe(self.args["prototxt"], self.args["model"])
+    def __init__(self, seq=None, tracker='ORB', mode='benchmark'):
+        """ Sets key parameters for SORT """
+        if tracker == 'Kalman':
+            self.tracker = KalmanTracker()
+        if tracker == 'ORB':
+            self.tracker = ORBTracker()
+            self.feature_detector = cv2.FastFeatureDetector
+        self.detections = None
+        self.mode = mode
+        self.seq = seq
+        if self.mode == 'benchmark':
+            # Load pre-made detections for .txt file (from MOT benchmark)
+            SORT.check_data_path()
+            file_path = 'data/%s/det.txt' % self.seq
+            self.detections = np.loadtxt(file_path, delimiter=',')
+        self.frame_count = 1
+        self.start_tracking()
 
-    def init_stream(self):
-        # initialize the video stream and allow the camera sensor to warmup
-        print("[INFO] starting video stream...")
+    def next_frame(self):
+        if self.mode == 'benchmark':
+            frame = SORT.show_source(self.seq, self.frame_count)
+            new_detections = self.detections[self.detections[:, 0] == self.frame_count, 2:7]
+            new_detections[:, 2:4] += new_detections[:, 0:2]  # convert to [x1,y1,w,h] to [x1,y1,x2,y2]
+            self.frame_count += 1
+            return frame, new_detections[:, :4]
 
-        vs = VideoStream(src=0).start()
-        time.sleep(2.0)
-
-        # loop over the frames from the video stream
+    def start_tracking(self):
+        """
+        Applies the SORT tracker on sequence input, plots image with bounding box for each frame
+        """
         while True:
-            # read the next frame from the video stream and resize it
-            frame = vs.read()
-            frame = imutils.resize(frame, width=400)
 
-            # if the frame dimensions are None, grab them
-            if self.W is None or self.H is None:
-                (self.H, self.W) = frame.shape[:2]
+            frame, detections = self.next_frame()
 
-            """ construct a blob from the frame, pass it through the network,
-            obtain our output predictions, and initialize the list of
-            bounding box rectangles """
-            blob = cv2.dnn.blobFromImage(frame, 1.0, (self.W, self.H), (104.0, 177.0, 123.0))
-            self.detector.setInput(blob)
-            detections = self.detector.forward()
-            bboxes = []
+            if isinstance(self.tracker, KalmanTracker):
+                ids_and_tracks = self.tracker.update(detections)
+            elif isinstance(self.tracker, ORBTracker):
+                    ids_and_tracks = self.tracker.update(frame, detections)
 
-            # loop over the detections
-            for i in range(0, detections.shape[2]):
-                # filter out weak detections by threshold
-                if detections[0, 0, i, 2] > self.args["confidence"]:
-                    # compute the (x, y)-coordinates of the bounding box for
-                    # the object, then update the bounding box rectangles list
-                    bbox = detections[0, 0, i, 3:7] * np.array([self.W, self.H, self.W, self.H])
-                    bboxes.append(bbox.astype("int"))
-
-                    # draw a bounding box surrounding the object
-                    (startX, startY, endX, endY) = bbox.astype("int")
-                    cv2.rectangle(frame, (startX, startY), (endX, endY), (0, 255, 0), 2)
-
-            # update our tracker using the computed set of bounding box rectangles
-            objects = self.tracker.update(bboxes)
-
-            # loop over the tracked objects
-            for objectID, state in objects.items():
-                # draw both the ID of the object and the centroid of the object on the output frame
-                centroid = bbox_to_centroid(state)
-                text = "ID {}".format(objectID)
+            # Draw bounding boxes and centroids
+            for ID, bbox in ids_and_tracks:
+                # Generate pseudo-random colors for bounding boxes
+                random.seed(ID)
+                h, s, l = random.random(), 0.5 + random.random() / 2.0, 0.4 + random.random() / 5.0
+                color = [int(256 * i) for i in colorsys.hls_to_rgb(h, l, s)]
+                startX, startY, endX, endY = bbox.astype("int")
+                cv2.rectangle(frame, (startX, startY), (endX, endY),
+                              color, 2)
+                centroid = bbox_to_centroid(bbox)
+                text = "ID {}".format(ID)
                 cv2.putText(frame, text, (centroid[0] - 10, centroid[1] - 10),
-                            cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 255, 0), 2)
-                cv2.circle(frame, (centroid[0], centroid[1]), 4, (0, 255, 0), -1)
+                            cv2.FONT_HERSHEY_SIMPLEX, 0.5, color, 2)
+                cv2.circle(frame, (centroid[0], centroid[1]), 4, color, -1)
 
-            # show the output frame
-            cv2.imshow("Frame", frame)
-            key = cv2.waitKey(1) & 0xFF
+            # Show tracked frame
+            cv2.imshow("Video Feed", frame)
 
             # if the `q` key was pressed, break from the loop
+            key = cv2.waitKey(1) & 0xFF
             if key == ord("q"):
                 break
 
-        # Cleanup
-        cv2.destroyAllWindows()
-        vs.stop()
+    @staticmethod
+    def show_source(seq, frame, phase='train'):
+        """ Method for displaying the origin video being tracked """
+        return cv2.imread('mot_benchmark/%s/%s/img1/%06d.jpg' % (phase, seq, frame))
+
+    @staticmethod
+    def check_data_path():
+        """ Validates correct implementation of symbolic link to data for SORT """
+        if not os.path.exists('mot_benchmark'):
+            print('''
+            ERROR: mot_benchmark link not found!\n
+            Create a symbolic link to the MOT benchmark\n
+            (https://motchallenge.net/data/2D_MOT_2015/#download)
+            ''')
+            exit()
 
 
 def main():
-    # construct the argument parse and parse the arguments
-    ap = argparse.ArgumentParser()
-    ap.add_argument("-p", "--prototxt", required=False,
-                    help="path to Caffe 'deploy' prototxt file")
-    ap.add_argument("-m", "--model", required=False,
-                    help="path to Caffe pre-trained model")
-    ap.add_argument("-c", "--confidence", type=float, default=0.5,
-                    help="minimum probability to filter weak detections")
-    args = vars(ap.parse_args())
-    mot_tracker = Sort(args)
+    """ Starts the tracker on source video """
+    # Initialize the parameters for SORT
+    # sequences = ['PETS09-S2L1', 'TUD-Campus', 'TUD-Stadtmitte', 'ETH-Bahnhof', 'ETH-Sunnyday', 'ETH-Pedcross2',
+    #              'KITTI-13', 'KITTI-17', 'ADL-Rundle-6', 'ADL-Rundle-8', 'Venice-2']
+    sequences = ['PETS09-S2L1']
+    for seq in sequences:
+        mot_tracker = SORT(seq)
+        del mot_tracker
 
 
 if __name__ == '__main__':
     main()
+
+
 
 

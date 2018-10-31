@@ -5,7 +5,7 @@ from tracker_utils import xxyy_to_xysr, xysr_to_xxyy
 import numpy as np
 
 
-class Track:
+class KalmanTrack:
     """
     This class represents the internal state of individual tracked objects observed as bounding boxes.
     """

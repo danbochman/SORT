@@ -1,7 +1,9 @@
 #!\bin\python2.7
 
+from __future__ import division, print_function
 from scipy.spatial.distance import cdist
 import numpy as np
+import cv2
 
 
 class Metric:
@@ -27,8 +29,20 @@ class Metric:
             detections = np.array(detections)[:, :, 0]
             return cdist(detections, trackers, Metric.iou)
 
+        if self.metric == 'FLANN':
+            return Metric.mdist(detections, trackers, Metric.FLANN)
+
         if self.metric == 'euc':
             return cdist(detections, trackers)
+
+    @staticmethod
+    def mdist(arr1, arr2, func):
+        dm = np.zeros((len(arr1), len(arr2)))
+        for i in xrange(len(arr1)):
+            for j in xrange(len(arr2)):
+                dm[i, j] = func(arr1[i], arr2[j])
+        return dm
+
 
     @staticmethod
     def iou(boxA, boxB):
@@ -50,6 +64,47 @@ class Metric:
 
         iou = interArea / float(boxAArea + boxBArea - interArea)
         return iou
+
+    @staticmethod
+    def FLANN(img1, img2):
+        # Initiate ORB detector
+        # cv2.imshow('img1', img1)
+        # cv2.imshow('img2', img2)
+        # cv2.waitKey(0)
+        orb = cv2.ORB_create(edgeThreshold=7, patchSize=7, nlevels=8, scaleFactor=1.2, WTA_K=2,
+                             scoreType=cv2.ORB_HARRIS_SCORE, firstLevel=0, nfeatures=500, fastThreshold=20)
+        # find the keypoints and descriptors with ORB
+        kp1, des1 = orb.detectAndCompute(img1, None)
+        kp2, des2 = orb.detectAndCompute(img2, None)
+        if isinstance(des1, type(None)) or isinstance(des2, type(None)):
+            # print (0)
+            return 0
+
+        # consider the appropriate reference for keypoint matches
+        num_kp = min(len(kp1), len(kp2))
+
+        # create BFMatcher object
+        bf = cv2.BFMatcher(normType=cv2.NORM_HAMMING, crossCheck=False)
+
+        # Match descriptors.
+        matches = bf.knnMatch(des1, des2, k=2)
+
+
+        # ratio test as per Lowe's paper
+        good_matches = []
+        for match in matches:
+            if len(match) != 2:
+                continue
+            m, n = match
+            if m.distance < 0.5 * n.distance:
+                good_matches.append(m)
+
+        score = len(good_matches) / num_kp
+        # print(score)
+        return score
+
+
+
 
 
 
