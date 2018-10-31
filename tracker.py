@@ -2,7 +2,6 @@ from collections import OrderedDict
 from metric import Metric
 from track import KalmanTrack
 from scipy.optimize import linear_sum_assignment
-import cv2
 import numpy as np
 
 
@@ -212,9 +211,9 @@ class ORBTracker(Tracker):
         for bbox in bboxes:
             x1, y1, x2, y2 = bbox.astype('int')
             if x2 >= frame.shape[1]:
-                x2 = frame.shape[1] - x1
+                x2 = [frame.shape[1] - 1]
             elif y2 >= frame.shape[0]:
-                y2 = frame.shape[0] - y1
+                y2 = [frame.shape[0] - 1]
             if isinstance(x1, np.ndarray):
                 bboxes_crop.append(frame[y1[0]:y2[0], x1[0]:x2[0]])
             else:

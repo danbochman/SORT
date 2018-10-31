@@ -77,7 +77,6 @@ class Metric:
         kp1, des1 = orb.detectAndCompute(img1, None)
         kp2, des2 = orb.detectAndCompute(img2, None)
         if isinstance(des1, type(None)) or isinstance(des2, type(None)):
-            # print (0)
             return 0
 
         # consider the appropriate reference for keypoint matches
