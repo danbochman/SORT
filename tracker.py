@@ -8,7 +8,7 @@ import numpy as np
 
 class Tracker:
 
-    def __init__(self, metric=None, matching_threshold=None, max_disappeared=4):
+    def __init__(self, metric=None, matching_threshold=None, max_disappeared=5):
         """ initialize the next unique object ID along with two ordered dictionaries,
         used to keep track of mapping a given object ID to its centroid and
         number of consecutive frames it has been marked as "disappeared", respectively
