@@ -6,14 +6,24 @@ import numpy as np
 
 
 class Tracker:
-
+    """
+    Parent class for the general Tracker case, intended for creating the basis for inheritance for specialized trackers.
+    Assumes the default use of KalmanFilter to assist tracking.
+    """
     def __init__(self, metric=None, matching_threshold=None, max_disappeared=5):
         """ initialize the next unique object ID along with two ordered dictionaries,
         used to keep track of mapping a given object ID to its centroid and
         number of consecutive frames it has been marked as "disappeared", respectively
         :param metric: (class Object) Metric class, determines metric used for distance matrix
-        :param matching_threshold: (float) minimum value acceptable for IoU matching
-        :param max_disappeared: (int) consecutive frames allowed before deletion """
+        :param matching_threshold: (float) minimum value acceptable for distance matrix matching
+        :param max_disappeared: (int) consecutive frames not seen allowed before track deletion
+
+        --- attributes ---
+        nextTrackID (int) - Unique key generator for tracks
+        tracked (OrderedDict) data structure for holding tracks (track ID,: Track class object)
+        disappeared (OrderedDict) data structure for keeping coutn of how many frames each track disappeared
+                    (track ID: disappearance count)
+        """
         self.nextTrackID = 0
         self.matching_threshold = matching_threshold
         self.tracked = OrderedDict()
@@ -21,9 +31,16 @@ class Tracker:
         self.max_disappeared = max_disappeared
         self.metric = Metric(metric)
 
+    def register(self, state):
+        """ Registers a new track with a new detection unmatched to other tracks
+        assigns the state to a new Track class object and initialized its data structures
+        :param state: (np.ndarray) initial state vector of object from new detection """
+        self.tracked[self.nextTrackID] = KalmanTrack(state)
+        self.disappeared[self.nextTrackID] = 0
+        self.nextTrackID += 1
+
     def deregister(self, object_id):
-        """ to de-register an object ID we delete the object ID from
-        both of our respective dictionaries
+        """ de-registers an object ID by deleting the object ID from both respective dictionaries
         :param object_id: (int) unique object id """
         del self.tracked[object_id]
         del self.disappeared[object_id]
@@ -31,7 +48,9 @@ class Tracker:
     def handle_no_detections(self):
         """ This method is called when there are no new detections for the detector.
         loops over all the tracked objects, updates their 'disappeared counter',
-        and deletes objects if their counter is expired """
+        and deletes objects if their counter is expired
+         :return (OrderedDict) dictionary containing (track_id: Track)
+         """
         for track_id in self.disappeared.keys():
             self.disappeared[track_id] += 1
             if self.disappeared[track_id] > self.max_disappeared:
@@ -40,45 +59,55 @@ class Tracker:
 
 
 class KalmanTracker(Tracker):
-
+    """
+    Specialized tracker class which inherits from the basic Tracker class
+    Utilizes the KalmanFilter and the IoU metric for more robust bounding box associations
+    """
     def __init__(self, metric='iou', matching_threshold=0.2):
+        """ Initialize the tracker from base class with relevant metrics """
         Tracker.__init__(self, metric, matching_threshold)
 
-    def register(self, state):
-        """ when registering an object we use the next available object
-        ID to store the state
-        :param state: (array) estimated state vector of detection """
-        self.tracked[self.nextTrackID] = KalmanTrack(state)
-        self.disappeared[self.nextTrackID] = 0
-        self.nextTrackID += 1
-
     def update(self, detections):
-        """Core method of the tracker, updates tracked objects after receiving detections.
+        """
+        Core method of the tracker, updates tracked objects after receiving detections.
         Associates detection with existing tracked objects, deletes disappeared detection and creates
         new trackers if non are associated with detections.
-        :param detections: (array) list of detections (bounding boxes)
-        :return self.objects: (array) list of tracked objects"""
-        if len(detections) == 0:  # Check to see if there are no detections
+        :param detections: (array) list of detections (bounding boxes in [x1,x2,y1,y2] format)
+        :return (array) list of tracked objects tuples in format (ID, [x1,x2,y1,y2])
+        """
+        # Check to see if there are no detections and handle if so
+        if len(detections) == 0:
             return self.handle_no_detections()
 
-        # if we are currently not tracking any objects, register all the input centroids
+        # if we are currently not tracking any objects, register all detections to new tracks
         if len(self.tracked) == 0:
             for i in range(0, len(detections)):
                 self.register(detections[i])
 
+        # otherwise, check to see how the new detections relate to current tracks
         else:
             self.associate(detections)
 
-        # return the corrected estimate of tracked objects and their ids (for specific color)
-        return [(ID, track.project()) for ID, track in self.tracked.items()]
+        # return the corrected estimate of tracked objects and their unique ids
+        tracks = [(ID, track.project()) for ID, track in self.tracked.items()]
+
+        # Make sure tracks are unpacked to their respective states
+        if isinstance(tracks, OrderedDict):
+            tracks = [(ID, track.project()) for ID, track in tracks.items()]
+
+        return tracks
 
     def associate(self, detections):
-        """ Performs the Hungarian algorithm and assignment between detections and existing
-        trackers according to distance matrix
-        :param detections: (array) list of new detections """
+        """
+        Performs the Hungarian algorithm and assignment between detections and existing
+        trackers according to distance matrix and metric specified
+        updates the Tracker class dictionaries after associations
+        :param detections: (array) list of new detections
+         """
         # Grab the set of object IDs and corresponding states
         track_ids = list(self.tracked.keys())
-        # Get predicted tracked object states from Kalman Filter
+
+        # Get predicted tracked object states from KalmanFilter
         tracked_states = [track.predict() for track in self.tracked.values()]
 
         # Compute the distance matrix between detections and trackers according to metric
@@ -102,7 +131,7 @@ class KalmanTracker(Tracker):
                 used_rows.add(row)
                 used_cols.add(col)
 
-        # Retrieve both the row and column indices we have NOT yet examined
+        # Retrieve both the row and column indices we have not yet examined
         unused_rows = set(range(0, D.shape[0])).difference(used_rows)
         unused_cols = set(range(0, D.shape[1])).difference(used_cols)
 
@@ -122,52 +151,65 @@ class KalmanTracker(Tracker):
 
 
 class ORBTracker(Tracker):
-
+    """
+    Specialized tracker class which inherits from the basic Tracker class
+    Utilizes the KalmanFilter and feature matching (ORB) for more accurate bounding box associations
+    """
     def __init__(self, metric='FLANN', matching_threshold=0.2):
+        """ Initialize the tracker from base class with relevant metrics """
         Tracker.__init__(self, metric, matching_threshold)
 
-    def register(self, state):
-        """ when registering an object we use the next available object
-        ID to store the state
-        :param state: (array) estimated state vector of detection """
-        self.tracked[self.nextTrackID] = KalmanTrack(state)
-        self.disappeared[self.nextTrackID] = 0
-        self.nextTrackID += 1
-
     def update(self, frame, detections):
-        """Core method of the tracker, updates tracked objects after receiving detections.
+        """
+        Core method of the tracker, updates tracked objects after receiving detections.
         Associates detection with existing tracked objects, deletes disappeared detection and creates
         new trackers if non are associated with detections.
-        :param detections: (array) list of detections (bounding boxes images)
-        :return self.objects: (array) list of tracked objects"""
-        if len(detections) == 0:  # Check to see if there are no detections
+        :param frame: (array) np.ndarray representing image frame associated with current detections
+        :param detections: (array) list of detections (bounding boxes in [x1,x2,y1,y2] format)
+        :return (array) list of tracked objects tuples in format (ID, [x1,x2,y1,y2])
+        """
+        # Check to see if there are no detections and handle if so
+        if len(detections) == 0:
             return self.handle_no_detections()
 
-        # if we are currently not tracking any objects, register all the input centroids
+        # if we are currently not tracking any objects, register all detections to new tracks
         if len(self.tracked) == 0:
             for i in range(0, len(detections)):
                 self.register(detections[i])
 
+        # otherwise, check to see how the new detections relate to current tracks
         else:
             self.associate(frame, detections)
 
-        # return the corrected estimate of tracked objects and their ids (for specific color)
-        return [(ID, track.project()) for ID, track in self.tracked.items()]
+        # return the corrected estimate of tracked objects and their unique ids
+        tracks = [(ID, track.project()) for ID, track in self.tracked.items()]
+
+        # Make sure tracks are unpacked to their respective states
+        if isinstance(tracks, OrderedDict):
+            tracks = [(ID, track.project()) for ID, track in tracks.items()]
+
+        return tracks
 
     def associate(self, frame, detections):
-        """ Performs the Hungarian algorithm and assignment between detections and existing
-        trackers according to distance matrix
-        :param frame: (np.array) new frame to be analyzed
-        :param detections: (array) list of new detections """
+        """
+        Performs the Hungarian algorithm and assignment between detections and existing
+        trackers according to distance matrix and metric specified.
+        updates the Tracker class dictionaries after associations
+        :param frame: (array) np.ndarray representing image frame associated with current detections
+        :param detections: (array) list of new detections
+         """
         # Grab the set of object IDs and corresponding states
         track_ids = list(self.tracked.keys())
+
         # Get predicted tracked object states from Kalman Filter
         tracked_states = [track.predict() for track in self.tracked.values()]
-        tracked_boxes = ORBTracker.crop_bbox_from_frame(frame, tracked_states)
-        detections_boxes = ORBTracker.crop_bbox_from_frame(frame, detections)
+
+        # Crop the image from each bounding box associated to new detections and current tracks
+        tracked_crops = ORBTracker.crop_bbox_from_frame(frame, tracked_states)
+        detections_crops = ORBTracker.crop_bbox_from_frame(frame, detections)
 
         # Compute the distance matrix between detections and trackers according to metric
-        D = self.metric.distance_matrix(tracked_boxes, detections_boxes)
+        D = self.metric.distance_matrix(tracked_crops, detections_crops)
 
         # Associate detections to existing trackers according to distance matrix
         rows, cols = linear_sum_assignment(-D)
@@ -207,13 +249,24 @@ class ORBTracker(Tracker):
 
     @staticmethod
     def crop_bbox_from_frame(frame, bboxes):
+        """
+        static method used by the ORBTracker for cropping slices from frame according to bounding box
+        :param frame: (array) np.ndarray representing image frame associated with current detections
+        :param bboxes: (array) list of bounding boxes
+        :return: (array) list where each element is an image crop from frame according to bounding box
+        """
         bboxes_crop = []
         for bbox in bboxes:
+            # Make sure the coordinates are type int so they can function as indices
             x1, y1, x2, y2 = bbox.astype('int')
+
+            # Truncate coordinates of detections if value exceeds frame image dimensions
             if x2 >= frame.shape[1]:
                 x2 = [frame.shape[1] - 1]
             elif y2 >= frame.shape[0]:
                 y2 = [frame.shape[0] - 1]
+
+            # Handle bounding boxes coordinates retrieved as list (not scalar)
             if isinstance(x1, np.ndarray):
                 bboxes_crop.append(frame[y1[0]:y2[0], x1[0]:x2[0]])
             else:

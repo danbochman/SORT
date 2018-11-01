@@ -1,21 +1,28 @@
 import numpy as np
 
 
-def xysr_to_xxyy(x, score=None):
-    """ Takes a bounding box in the centre form [x,y,s,r] and returns it in the form
-    [x1,y1,x2,y2] where x1,y1 is the top left and x2,y2 is the bottom right """
-    w = np.sqrt(x[2]*x[3])
-    h = x[2]/w
+def xysr_to_xxyy(b, score=None):
+    """
+     Takes a bounding box in the centre form [x,y,s,r] and returns it in the form
+    [x1,y1,x2,y2] where x1,y1 is the top left and x2,y2 is the bottom right
+    :param b: (np.ndarray) bounding box in [x,y,s,r] format
+    :param score: (float) Mostly irrelevant, incase bounding box comes with score attached to position
+    :return: (np.ndarray) same bounding box in [x1,y1,x2,y2] format
+    """
+    w = np.sqrt(b[2]*b[3])
+    h = b[2]/w
     if score is None:
-        return np.array([x[0]-w/2., x[1]-h/2., x[0]+w/2., x[1]+h/2.]).reshape(4, 1)
+        return np.array([b[0]-w/2., b[1]-h/2., b[0]+w/2., b[1]+h/2.]).reshape(4, 1)
     else:
-        return np.array([x[0]-w/2., x[1]-h/2., x[0]+w/2., x[1]+h/2., score])
+        return np.array([b[0]-w/2., b[1]-h/2., b[0]+w/2., b[1]+h/2., score])
 
 
 def xxyy_to_xysr(bbox):
-    """ Takes a bounding box in the form [x1,y1,x2,y2] and returns z in the form
-    [x,y,s,r] where x,y is the centre of the box and s is the scale/area and r is
-    the aspect ratio"""
+    """
+     Takes a bounding box in the form [x1,y1,x2,y2] and returns it in the form [x,y,s,r]
+    :param bbox: (np.ndarray) bounding box in [x,y,s,r] format
+    :return: (np.ndarray) same bounding box in [x,y,s,r] format
+    """
     w = bbox[2]-bbox[0]
     h = bbox[3]-bbox[1]
     x = bbox[0]+w/2.
