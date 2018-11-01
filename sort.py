@@ -12,7 +12,7 @@ import cv2
 from tracker_utils import bbox_to_centroid
 import random
 import colorsys
-from collections import OrderedDict
+
 
 class SORT:
 
@@ -91,7 +91,7 @@ class SORT:
                 text = "ID {}".format(ID)
                 cv2.putText(frame, text, (centroid[0] - 10, centroid[1] - 10),
                             cv2.FONT_HERSHEY_SIMPLEX, 0.5, color, 2)
-            cv2.circle(frame, (centroid[0], centroid[1]), 4, color, -1)
+                cv2.circle(frame, (centroid[0], centroid[1]), 4, color, -1)
 
             # Show tracked frame
             cv2.imshow("Video Feed", frame)
