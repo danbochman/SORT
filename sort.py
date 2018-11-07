@@ -16,7 +16,7 @@ import colorsys
 
 class SORT:
 
-    def __init__(self, seq=None, tracker='ORB', mode='benchmark'):
+    def __init__(self, seq=None, tracker='ReID', mode='benchmark'):
         """
          Sets key parameters for SORT
         :param seq: (string) relevant for 'benchmark' mode. name of folder containing sequences of images
@@ -71,7 +71,7 @@ class SORT:
             # Send new detections to set tracker
             if isinstance(self.tracker, KalmanTracker):
                 tracks = self.tracker.update(detections)
-            elif isinstance(self.tracker, ORBTracker):
+            elif isinstance(self.tracker, ORBTracker) or isinstance(self.tracker, ReIDTracker):
                 tracks = self.tracker.update(frame, detections)
             else:
                 raise Exception('[ERROR] Tracker type not specified for SORT')

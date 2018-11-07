@@ -4,7 +4,7 @@ from __future__ import division, print_function
 from scipy.spatial.distance import cdist
 import numpy as np
 import cv2
-
+from reid_nn.reidnn import reid
 
 class Metric:
     """
@@ -41,7 +41,7 @@ class Metric:
 
         if self.metric == 'ReIDNN':
             # Calls the mdist static method since in this case detections and tracks are lists of images (3D arrays)
-            return Metric.mdist(detections, trackers, Metric.FLANN)
+            return Metric.mdist(detections, trackers, Metric.ReIDNN)
 
         if self.metric == 'euc':
             return cdist(detections, trackers)
@@ -71,7 +71,8 @@ class Metric:
         :param img1, img2: (ndarray) two image slices taken from frame representing bounding boxes
         :return: (float) scalar similarity score
         """
-
+        sim_score = reid(img1, img2)
+        return sim_score[0, 0]
 
     @staticmethod
     def iou(boxA, boxB):
