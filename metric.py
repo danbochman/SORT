@@ -39,8 +39,13 @@ class Metric:
             # Calls the mdist static method since in this case detections and tracks are lists of images (3D arrays)
             return Metric.mdist(detections, trackers, Metric.FLANN)
 
+        if self.metric == 'ReIDNN':
+            # Calls the mdist static method since in this case detections and tracks are lists of images (3D arrays)
+            return Metric.mdist(detections, trackers, Metric.FLANN)
+
         if self.metric == 'euc':
             return cdist(detections, trackers)
+
 
     @staticmethod
     def mdist(arr1, arr2, func):
@@ -57,6 +62,15 @@ class Metric:
             for j in xrange(len(arr2)):
                 dm[i, j] = func(arr1[i], arr2[j])
         return dm
+
+    @staticmethod
+    def ReIDNN(img1, img2):
+        """
+        computes a similarity score by inputting the images by inference to a siamese network trained for
+        person re-identification
+        :param img1, img2: (ndarray) two image slices taken from frame representing bounding boxes
+        :return: (float) scalar similarity score
+        """
 
 
     @staticmethod

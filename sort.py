@@ -6,7 +6,7 @@ Main module for the real-time tracker class execution. Based on the SORT algorit
 
 from __future__ import print_function
 import os.path
-from tracker import KalmanTracker, ORBTracker
+from tracker import KalmanTracker, ORBTracker, ReIDTracker
 import numpy as np
 import cv2
 from tracker_utils import bbox_to_centroid
@@ -31,6 +31,8 @@ class SORT:
             self.tracker = KalmanTracker()
         if tracker == 'ORB':
             self.tracker = ORBTracker()
+        if tracker == 'ReID':
+            self.tracker = ReIDTracker()
         self.detections = None
         self.mode = mode
         self.seq = seq
