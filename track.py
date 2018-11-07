@@ -31,11 +31,11 @@ class KalmanTrack:
                               [0, 0, 1, 0, 0, 0, 0],
                               [0, 0, 0, 1, 0, 0, 0]])
 
-        self.kf.R[2:, 2:] *= 1.  # observation error covariance
+        self.kf.R[2:, 2:] *= 10.  # observation error covariance
         self.kf.P[4:, 4:] *= 1000.  # initial velocity error covariance
-        self.kf.P *= 1000.  # initial location error covariance
-        self.kf.Q[-1, -1] *= 0.1  # process noise
-        self.kf.Q[4:, 4:] *= 0.1  # process noise
+        self.kf.P *= 10.  # initial location error covariance
+        self.kf.Q[-1, -1] *= 0.01  # process noise
+        self.kf.Q[4:, 4:] *= 0.01  # process noise
         self.kf.x[:4] = xxyy_to_xysr(initial_state)  # initialize KalmanFilter state
 
     def project(self):

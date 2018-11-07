@@ -5,7 +5,7 @@ import cv2
 FLAGS = tf.flags.FLAGS
 tf.flags.DEFINE_integer('batch_size', '32', 'batch size for training')
 tf.flags.DEFINE_integer('max_steps', '210000', 'max steps for training')
-tf.flags.DEFINE_string('logs_dir', 'logs/', 'path to logs directory')
+tf.flags.DEFINE_string('logs_dir', '/home/mystique/PycharmProjects/SORT/sort/reid_nn/logs/', 'path to logs directory')
 tf.flags.DEFINE_string('data_dir', 'data/', 'path to dataset')
 tf.flags.DEFINE_float('learning_rate', '0.01', '')
 tf.flags.DEFINE_string('mode', 'train', 'Mode train, val, test')
@@ -15,41 +15,10 @@ tf.flags.DEFINE_string('image2', '', 'Second image path to compare')
 IMAGE_WIDTH = 60
 IMAGE_HEIGHT = 160
 
-
-def preprocess(images, is_train):
-    def train():
-        split = tf.split(images, [1, 1])
-        shape = [1 for _ in xrange(split[0].get_shape()[1])]
-        for i in xrange(len(split)):
-            split[i] = tf.reshape(split[i], [FLAGS.batch_size, IMAGE_HEIGHT, IMAGE_WIDTH, 3])
-            split[i] = tf.image.resize_images(split[i], [IMAGE_HEIGHT + 8, IMAGE_WIDTH + 3])
-            split[i] = tf.split(split[i], shape)
-            for j in xrange(len(split[i])):
-                split[i][j] = tf.reshape(split[i][j], [IMAGE_HEIGHT + 8, IMAGE_WIDTH + 3, 3])
-                split[i][j] = tf.random_crop(split[i][j], [IMAGE_HEIGHT, IMAGE_WIDTH, 3])
-                split[i][j] = tf.image.random_flip_left_right(split[i][j])
-                split[i][j] = tf.image.random_brightness(split[i][j], max_delta=32. / 255.)
-                split[i][j] = tf.image.random_saturation(split[i][j], lower=0.5, upper=1.5)
-                split[i][j] = tf.image.random_hue(split[i][j], max_delta=0.2)
-                split[i][j] = tf.image.random_contrast(split[i][j], lower=0.5, upper=1.5)
-                split[i][j] = tf.image.per_image_standardization(split[i][j])
-        return [tf.reshape(tf.concat(split[0], axis=0), [FLAGS.batch_size, IMAGE_HEIGHT, IMAGE_WIDTH, 3]),
-                tf.reshape(tf.concat(split[1], axis=0), [FLAGS.batch_size, IMAGE_HEIGHT, IMAGE_WIDTH, 3])]
-
-    def val():
-        split = tf.split(images, [1, 1])
-        shape = [1 for _ in xrange(split[0].get_shape()[1])]
-        for i in xrange(len(split)):
-            split[i] = tf.reshape(split[i], [FLAGS.batch_size, IMAGE_HEIGHT, IMAGE_WIDTH, 3])
-            split[i] = tf.image.resize_images(split[i], [IMAGE_HEIGHT, IMAGE_WIDTH])
-            split[i] = tf.split(split[i], shape)
-            for j in xrange(len(split[i])):
-                split[i][j] = tf.reshape(split[i][j], [IMAGE_HEIGHT, IMAGE_WIDTH, 3])
-                split[i][j] = tf.image.per_image_standardization(split[i][j])
-        return [tf.reshape(tf.concat(split[0], axis=0), [FLAGS.batch_size, IMAGE_HEIGHT, IMAGE_WIDTH, 3]),
-                tf.reshape(tf.concat(split[1], axis=0), [FLAGS.batch_size, IMAGE_HEIGHT, IMAGE_WIDTH, 3])]
-
-    return tf.cond(is_train, train, val)
+def preprocess(images):
+    split = tf.split(images, [1, 1])
+    return [tf.reshape(tf.concat(split[0], axis=0), [FLAGS.batch_size, IMAGE_HEIGHT, IMAGE_WIDTH, 3]),
+            tf.reshape(tf.concat(split[1], axis=0), [FLAGS.batch_size, IMAGE_HEIGHT, IMAGE_WIDTH, 3])]
 
 
 def network(images1, images2, weight_decay):
@@ -114,39 +83,37 @@ def network(images1, images2, weight_decay):
         return fc2
 
 
-def reid(image1, image2, batch_size=1):
-    FLAGS.batch_size = batch_size
+def reid(image_pairs):
+    FLAGS.batch_size = image_pairs.shape[1]
     is_train = tf.placeholder(tf.bool, name='is_train')
     weight_decay = 0.0005
     images = tf.placeholder(tf.float32, [2, FLAGS.batch_size, IMAGE_HEIGHT, IMAGE_WIDTH, 3], name='images')
-    images1, images2 = preprocess(images, is_train)
+    images1, images2 = preprocess(images)
     logits = network(images1, images2, weight_decay)
     inference = tf.nn.softmax(logits)
 
     with tf.Session() as sess:
-        # tf.reset_default_graph()
         sess.run(tf.global_variables_initializer())
-        saver = tf.train.Saver(defer_build=True)
-
+        saver = tf.train.Saver()
         ckpt = tf.train.get_checkpoint_state(FLAGS.logs_dir)
         if ckpt and ckpt.model_checkpoint_path:
-            print('Restore model')
             saver.restore(sess, ckpt.model_checkpoint_path)
 
-        if (0 in image1.shape) or 0 in (image2.shape):
-            return np.array([0, 1]).reshape(1, 2)
-        cv2.imshow('img1', image1)
-        cv2.imshow('img2', image2)
+        feed_dict = {images: image_pairs, is_train: False}
+        predictions = sess.run(inference, feed_dict=feed_dict)
+        # show_matches_score(image_pairs, predictions)
+        return predictions[:, 0].reshape(1, -1)
+
+def show_matches_score(image_pairs, predictions):
+    image_pairs = np.transpose(image_pairs, (1, 0, 2, 3, 4))
+    for i in xrange(image_pairs.shape[0]):
+        pair = image_pairs[i, :, :, :, :]
+        img1 = pair[0, :, :, :]
+        img2 = pair[1, :, :, :]
+        cv2.imshow('img1', img1)
+        cv2.imshow('img2', img2)
+        print predictions[i][0]
         cv2.waitKey(0)
-        image1 = cv2.resize(image1, (IMAGE_WIDTH, IMAGE_HEIGHT))
-        image1 = np.reshape(image1, (1, IMAGE_HEIGHT, IMAGE_WIDTH, 3)).astype(float)
-        image2 = cv2.resize(image2, (IMAGE_WIDTH, IMAGE_HEIGHT))
-        image2 = np.reshape(image2, (1, IMAGE_HEIGHT, IMAGE_WIDTH, 3)).astype(float)
-        test_images = np.array([image1, image2])
-        feed_dict = {images: test_images, is_train: False}
-        prediction = sess.run(inference, feed_dict=feed_dict)
-        print (prediction[0, 0])
-        return prediction
 
 
 if __name__ == '__main__':

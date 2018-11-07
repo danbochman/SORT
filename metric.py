@@ -19,9 +19,9 @@ class Metric:
         """
         self.metric = metric
 
-    def distance_matrix(self, detections, trackers):
+    def distance_matrix(self, detections, tracks):
         """
-        Compute distance between detections and trackers.
+        Compute distance between detections and tracks.
         Utilizes the scipy.spatial.distance.cdist for computation acceleration where possible.
         In cases where detection\trackers are 3D arrays, use the staticmethod mdist instead.
         Returns a cost matrix of shape len(detections), len(trackers).
@@ -33,18 +33,18 @@ class Metric:
         if self.metric == 'iou':
             # Make sure detection are in the right format for operation
             detections = np.array(detections)[:, :, 0]
-            return cdist(detections, trackers, Metric.iou)
+            return cdist(detections, tracks, Metric.iou)
 
         if self.metric == 'FLANN':
             # Calls the mdist static method since in this case detections and tracks are lists of images (3D arrays)
-            return Metric.mdist(detections, trackers, Metric.FLANN)
+            return Metric.mdist(detections, tracks, Metric.FLANN)
 
         if self.metric == 'ReIDNN':
             # Calls the mdist static method since in this case detections and tracks are lists of images (3D arrays)
-            return Metric.mdist(detections, trackers, Metric.ReIDNN)
+            return Metric.batch_mdist(detections, tracks, reid)
 
         if self.metric == 'euc':
-            return cdist(detections, trackers)
+            return cdist(detections, tracks)
 
 
     @staticmethod
@@ -64,15 +64,37 @@ class Metric:
         return dm
 
     @staticmethod
-    def ReIDNN(img1, img2):
+    def im_reshape(img, img_w, img_h):
+        img = cv2.resize(img, (img_w, img_h))
+        return img
+
+    @staticmethod
+    def preprocess_images(detections, tracks):
+        img_w = 60
+        img_h = 160
+        detections = np.array(detections)
+        tracks = np.array(tracks)
+        detections = [detection if not (0 in detection.shape) else np.zeros((160, 60, 3)) for detection in detections]
+        tracks = [track if not (0 in track.shape) else np.zeros((160, 60, 3)) for track in tracks]
+        image_pairs = [[Metric.im_reshape(detection, img_w, img_h),
+                        Metric.im_reshape(track, img_w, img_h)]
+                       for detection in detections for track in tracks]
+        image_pairs = np.transpose(image_pairs, (1, 0, 2, 3, 4))
+        return image_pairs
+
+    @staticmethod
+    def batch_mdist(detections, tracks, nn):
         """
-        computes a similarity score by inputting the images by inference to a siamese network trained for
-        person re-identification
-        :param img1, img2: (ndarray) two image slices taken from frame representing bounding boxes
-        :return: (float) scalar similarity score
+        function for computing a more general distance matrix, where the inputs can be any type (e.g 3D matrices)
+        :param arr1: (any type) this function is mostly relevant for images. arr1 would be new detections represented as images
+        :param arr2: (any type) arr2 would be images associated with tracks.
+        :param nn: neural network for producing similarity score
+        :return: (np.ndarray) distance matrix
         """
-        sim_score = reid(img1, img2)
-        return sim_score[0, 0]
+        image_pairs = Metric.preprocess_images(detections, tracks)
+        predictions = nn(image_pairs)
+        distance_matrix = predictions.reshape(len(detections), len(tracks))
+        return distance_matrix
 
     @staticmethod
     def iou(boxA, boxB):

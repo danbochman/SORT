@@ -62,7 +62,7 @@ class Tracker:
 
         # Make sure tracks are unpacked to their respective states
         if isinstance(tracks, OrderedDict):
-            tracks = [(ID, track.project()) for ID, track in tracks.items() if self.disappeared[ID] > 0]
+            tracks = [(ID, track.project()) for ID, track in tracks.items() if self.disappeared[ID] == 0]
 
         return tracks
 
@@ -247,9 +247,11 @@ class ReIDTracker(Tracker):
     Specialized tracker class which inherits from the basic Tracker class
     Utilizes the KalmanFilter and feature matching (ORB) for more accurate bounding box associations
     """
-    def __init__(self, metric='ReIDNN', matching_threshold=0.2):
+    def __init__(self, matching_threshold=0.2):
         """ Initialize the tracker from base class with relevant metrics """
-        Tracker.__init__(self, metric, matching_threshold)
+        Tracker.__init__(self, matching_threshold)
+        self.metric_nn = Metric('ReIDNN')
+        self.metric_iou = Metric('iou')
 
     def update(self, frame, detections):
         """
@@ -295,7 +297,9 @@ class ReIDTracker(Tracker):
         detections_crops = Tracker.crop_bbox_from_frame(frame, detections)
 
         # Compute the distance matrix between detections and trackers according to metric
-        D = self.metric.distance_matrix(tracked_crops, detections_crops)
+        D_nn = self.metric_nn.distance_matrix(tracked_crops, detections_crops)
+        D_iou = self.metric_iou.distance_matrix(tracked_states, detections)
+        D = np.multiply(D_nn + 0.1, D_iou)
 
         # Associate detections to existing trackers according to distance matrix
         self.linear_assignment(D, track_ids, detections)
