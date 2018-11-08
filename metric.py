@@ -6,6 +6,7 @@ import numpy as np
 import cv2
 from reid_nn.reidnn import reid
 
+
 class Metric:
     """
     class for containing metric configurations intended for use for trackers.
@@ -19,7 +20,7 @@ class Metric:
         """
         self.metric = metric
 
-    def distance_matrix(self, detections, tracks):
+    def distance_matrix(self, tracks, detections):
         """
         Compute distance between detections and tracks.
         Utilizes the scipy.spatial.distance.cdist for computation acceleration where possible.
@@ -32,20 +33,19 @@ class Metric:
         """
         if self.metric == 'iou':
             # Make sure detection are in the right format for operation
-            detections = np.array(detections)[:, :, 0]
-            return cdist(detections, tracks, Metric.iou)
+            tracks = np.array(tracks)[:, :, 0]
+            return cdist(tracks, detections, Metric.iou)
 
-        if self.metric == 'FLANN':
+        if self.metric == 'ORB':
             # Calls the mdist static method since in this case detections and tracks are lists of images (3D arrays)
-            return Metric.mdist(detections, tracks, Metric.FLANN)
+            return Metric.mdist(tracks, detections, Metric.ORB)
 
         if self.metric == 'ReIDNN':
             # Calls the mdist static method since in this case detections and tracks are lists of images (3D arrays)
-            return Metric.batch_mdist(detections, tracks, reid)
+            return Metric.batch_mdist(tracks, detections, reid)
 
         if self.metric == 'euc':
-            return cdist(detections, tracks)
-
+            return cdist(tracks, detections)
 
     @staticmethod
     def mdist(arr1, arr2, func):
@@ -64,36 +64,35 @@ class Metric:
         return dm
 
     @staticmethod
-    def im_reshape(img, img_w, img_h):
-        img = cv2.resize(img, (img_w, img_h))
-        return img
-
-    @staticmethod
-    def preprocess_images(detections, tracks):
+    def preprocess_images(tracks, detections):
+        """
+        static method for preparing the image crops from detections and tracks to be sent to the Re-ID NN
+        :param detections, tracks: (array) list of images cropped from frame
+        :return: (array) list of lists when each list is a pair of [detection, track] cropped images
+        """
         img_w = 60
         img_h = 160
         detections = np.array(detections)
         tracks = np.array(tracks)
         detections = [detection if not (0 in detection.shape) else np.zeros((160, 60, 3)) for detection in detections]
         tracks = [track if not (0 in track.shape) else np.zeros((160, 60, 3)) for track in tracks]
-        image_pairs = [[Metric.im_reshape(detection, img_w, img_h),
-                        Metric.im_reshape(track, img_w, img_h)]
-                       for detection in detections for track in tracks]
+        image_pairs = [[cv2.resize(track, (img_w, img_h)),
+                        cv2.resize(detection, (img_w, img_h))]
+                       for track in tracks for detection in detections]
         image_pairs = np.transpose(image_pairs, (1, 0, 2, 3, 4))
         return image_pairs
 
     @staticmethod
-    def batch_mdist(detections, tracks, nn):
+    def batch_mdist(tracks, detections, nn):
         """
         function for computing a more general distance matrix, where the inputs can be any type (e.g 3D matrices)
-        :param arr1: (any type) this function is mostly relevant for images. arr1 would be new detections represented as images
-        :param arr2: (any type) arr2 would be images associated with tracks.
+        :param tracks, detections: (arrays) list of cropped images from frame associated with tracks and detections
         :param nn: neural network for producing similarity score
         :return: (np.ndarray) distance matrix
         """
-        image_pairs = Metric.preprocess_images(detections, tracks)
+        image_pairs = Metric.preprocess_images(tracks, detections)
         predictions = nn(image_pairs)
-        distance_matrix = predictions.reshape(len(detections), len(tracks))
+        distance_matrix = predictions.reshape(len(tracks), len(detections))
         return distance_matrix
 
     @staticmethod
@@ -122,7 +121,7 @@ class Metric:
         return iou
 
     @staticmethod
-    def FLANN(img1, img2):
+    def ORB(img1, img2):
         """
         Fast Approximate Nearest Neighbor Search implementation in OpenCV.
         Returns a score for image similarity between 0-1 (1 - Very similar)

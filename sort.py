@@ -20,7 +20,7 @@ class SORT:
         """
          Sets key parameters for SORT
         :param seq: (string) relevant for 'benchmark' mode. name of folder containing sequences of images
-        :param tracker: (string) 'ORB' or 'Kalman', determines which Tracker class will be used for tracking
+        :param tracker: (string) 'ORB', 'Kalman' or 'ReID', determines which Tracker class will be used for tracking
         :param mode: (string) 'benchmark' or 'stream', determines what the video source will be for SORT to track
 
         ---- attributes ---

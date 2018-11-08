@@ -10,7 +10,7 @@ class Tracker:
     Parent class for the general Tracker case, intended for creating the basis for inheritance for specialized trackers.
     Assumes the default use of KalmanFilter to assist tracking.
     """
-    def __init__(self, metric=None, matching_threshold=None, max_disappeared=5):
+    def __init__(self, metric=None, matching_threshold=None, max_disappeared=10):
         """ initialize the next unique object ID along with two ordered dictionaries,
         used to keep track of mapping a given object ID to its centroid and
         number of consecutive frames it has been marked as "disappeared", respectively
@@ -188,69 +188,10 @@ class ORBTracker(Tracker):
     Specialized tracker class which inherits from the basic Tracker class
     Utilizes the KalmanFilter and feature matching (ORB) for more accurate bounding box associations
     """
-    def __init__(self, metric='FLANN', matching_threshold=0.2):
-        """ Initialize the tracker from base class with relevant metrics """
-        Tracker.__init__(self, metric, matching_threshold)
-
-    def update(self, frame, detections):
-        """
-        Core method of the tracker, updates tracked objects after receiving detections.
-        Associates detection with existing tracked objects, deletes disappeared detection and creates
-        new trackers if non are associated with detections.
-        :param frame: (array) np.ndarray representing image frame associated with current detections
-        :param detections: (array) list of detections (bounding boxes in [x1,x2,y1,y2] format)
-        :return (array) list of tracked objects tuples in format (ID, [x1,x2,y1,y2])
-        """
-        # Check to see if there are no detections and handle if so
-        if len(detections) == 0:
-            return self.handle_no_detections()
-
-        # if we are currently not tracking any objects, register all detections to new tracks
-        if len(self.tracked) == 0:
-            for i in range(0, len(detections)):
-                self.register(detections[i])
-
-        # otherwise, check to see how the new detections relate to current tracks
-        else:
-            self.associate(frame, detections)
-
-        # return the corrected estimate of tracked objects and their unique ids
-        return self.project()
-
-    def associate(self, frame, detections):
-        """
-        Performs the Hungarian algorithm and assignment between detections and existing
-        trackers according to distance matrix and metric specified.
-        updates the Tracker class dictionaries after associations
-        :param frame: (array) np.ndarray representing image frame associated with current detections
-        :param detections: (array) list of new detections
-         """
-        # Grab the set of object IDs and corresponding states
-        track_ids = list(self.tracked.keys())
-
-        # Get predicted tracked object states from Kalman Filter
-        tracked_states = [track.predict() for track in self.tracked.values()]
-
-        # Crop the image from each bounding box associated to new detections and current tracks
-        tracked_crops = Tracker.crop_bbox_from_frame(frame, tracked_states)
-        detections_crops = Tracker.crop_bbox_from_frame(frame, detections)
-
-        # Compute the distance matrix between detections and trackers according to metric
-        D = self.metric.distance_matrix(tracked_crops, detections_crops)
-
-        # Associate detections to existing trackers according to distance matrix
-        self.linear_assignment(D, track_ids, detections)
-
-
-class ReIDTracker(Tracker):
-    """
-    Specialized tracker class which inherits from the basic Tracker class
-    Utilizes the KalmanFilter and feature matching (ORB) for more accurate bounding box associations
-    """
-    def __init__(self, matching_threshold=0.2):
+    def __init__(self, matching_threshold=0.01):
         """ Initialize the tracker from base class with relevant metrics """
         Tracker.__init__(self, matching_threshold)
-        self.metric_nn = Metric('ReIDNN')
+        self.metric_orb = Metric('ORB')
         self.metric_iou = Metric('iou')
 
     def update(self, frame, detections):
@@ -297,9 +238,81 @@ class ReIDTracker(Tracker):
         detections_crops = Tracker.crop_bbox_from_frame(frame, detections)
 
         # Compute the distance matrix between detections and trackers according to metric
-        D_nn = self.metric_nn.distance_matrix(tracked_crops, detections_crops)
+        D_orb = self.metric_orb.distance_matrix(tracked_crops, detections_crops)
         D_iou = self.metric_iou.distance_matrix(tracked_states, detections)
-        D = np.multiply(D_nn + 0.1, D_iou)
+        w = 0.2
+        D = np.multiply(w * D_orb, (1-w) * D_iou)
+
+        # Associate detections to existing trackers according to distance matrix
+        self.linear_assignment(D, track_ids, detections)
+
+
+class ReIDTracker(Tracker):
+    """
+    Specialized tracker class which inherits from the basic Tracker class
+    Utilizes the KalmanFilter and a person re-identification neural network for more accurate bounding box associations
+    """
+    def __init__(self, matching_threshold=0.2, diff_threshold=0.2):
+        """ Initialize the tracker from base class with relevant metrics """
+        Tracker.__init__(self, matching_threshold=matching_threshold)
+        self.metric_nn = Metric('ReIDNN')
+        self.metric_iou = Metric('iou')
+        self.diff_threshold = diff_threshold
+
+    def update(self, frame, detections):
+        """
+        Core method of the tracker, updates tracked objects after receiving detections.
+        Associates detection with existing tracked objects, deletes disappeared detection and creates
+        new trackers if non are associated with detections.
+        :param frame: (array) np.ndarray representing image frame associated with current detections
+        :param detections: (array) list of detections (bounding boxes in [x1,x2,y1,y2] format)
+        :return (array) list of tracked objects tuples in format (ID, [x1,x2,y1,y2])
+        """
+        # Check to see if there are no detections and handle if so
+        if len(detections) == 0:
+            return self.handle_no_detections()
+
+        # if we are currently not tracking any objects, register all detections to new tracks
+        if len(self.tracked) == 0:
+            for i in range(0, len(detections)):
+                self.register(detections[i])
+
+        # otherwise, check to see how the new detections relate to current tracks
+        else:
+            self.associate(frame, detections)
+
+        # return the corrected estimate of tracked objects and their unique ids
+        return self.project()
+
+    def associate(self, frame, detections):
+        """
+        Performs the Hungarian algorithm and assignment between detections and existing
+        trackers according to distance matrix and metric specified.
+        updates the Tracker class dictionaries after associations
+        :param frame: (array) np.ndarray representing image frame associated with current detections
+        :param detections: (array) list of new detections
+         """
+        # Grab the set of object IDs and corresponding states
+        track_ids = list(self.tracked.keys())
+
+        # Get predicted tracked object states from Kalman Filter
+        tracked_states = [track.predict() for track in self.tracked.values()]
+
+        # Crop the image from each bounding box associated to new detections and current tracks
+        tracked_crops = Tracker.crop_bbox_from_frame(frame, tracked_states)
+        detections_crops = Tracker.crop_bbox_from_frame(frame, detections)
+
+        # Compute the distance matrix between detections and trackers according to metric
+        D = self.metric_iou.distance_matrix(tracked_states, detections)
+        D_iou_sorted = -np.sort(-D)
+
+        # Check if there are difficult overlapping IoU between a track and several detections
+        for row_idx in xrange(D.shape[0]):
+            if (D_iou_sorted[row_idx, 0] - D_iou_sorted[row_idx, 1] < self.diff_threshold) and (D_iou_sorted[row_idx, 0] > self.matching_threshold):
+                # Consult with re-identification network
+                D_nn = self.metric_nn.distance_matrix(tracked_crops, detections_crops)
+                D = np.multiply(D, D_nn)
+                break
 
         # Associate detections to existing trackers according to distance matrix
         self.linear_assignment(D, track_ids, detections)
