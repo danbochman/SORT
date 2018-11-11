@@ -1,7 +1,9 @@
+from __future__ import division, print_function
 import tensorflow as tf
 import numpy as np
 import cv2
 
+# Set tensorflow app flags
 FLAGS = tf.flags.FLAGS
 tf.flags.DEFINE_integer('batch_size', '32', 'batch size for training')
 tf.flags.DEFINE_integer('max_steps', '210000', 'max steps for training')
@@ -12,16 +14,32 @@ tf.flags.DEFINE_string('mode', 'train', 'Mode train, val, test')
 tf.flags.DEFINE_string('image1', '', 'First image path to compare')
 tf.flags.DEFINE_string('image2', '', 'Second image path to compare')
 
+# Input images fixed size
 IMAGE_WIDTH = 60
 IMAGE_HEIGHT = 160
 
+
 def preprocess(images):
+    """
+    split and concat the image pairs to tensor objects in format suitable for neural network feed-forward
+    :param images: (numpy array) image pairs
+    :return: tensor reformatted pair
+    """
     split = tf.split(images, [1, 1])
     return [tf.reshape(tf.concat(split[0], axis=0), [FLAGS.batch_size, IMAGE_HEIGHT, IMAGE_WIDTH, 3]),
             tf.reshape(tf.concat(split[1], axis=0), [FLAGS.batch_size, IMAGE_HEIGHT, IMAGE_WIDTH, 3])]
 
 
 def network(images1, images2, weight_decay):
+    """
+    Siamese neural network for training person re-identification. Based on:
+    https://www.cv-foundation.org/openaccess/content_cvpr_2015/papers/Ahmed_An_Improved_Deep_2015_CVPR_paper.pdf
+    :param images1, images2: image pairs (positive and negative examples)
+    :param weight_decay: (scalar) an additional term in the weight update rule that causes the weights to exponentially
+                         decay to zero, if no other update is scheduled.
+    :return: logits (before softmax)
+    """
+
     with tf.variable_scope('network', reuse=tf.AUTO_REUSE):
         # Tied Convolution
         conv1_1 = tf.layers.conv2d(images1, 20, [5, 5], activation=tf.nn.relu,
@@ -50,7 +68,7 @@ def network(images1, images2, weight_decay):
         pad = tf.pad(reshape, [[0, 0], [0, 0], [0, 0], [2, 2], [2, 2]])
         for i in xrange(shape[2]):
             for j in xrange(shape[3]):
-                g.append(pad[:,:,:,i:i+5,j:j+5])
+                g.append(pad[:, :, :, i:i+5, j:j+5])
 
         concat = tf.concat(g, axis=0)
         reshape = tf.reshape(concat, [shape[2], shape[3], shape[0], shape[1], 5, 5])
@@ -84,6 +102,10 @@ def network(images1, images2, weight_decay):
 
 
 def reid(image_pairs):
+    """
+    Starts a tensorflow session for a batch of image pairs coming from the sort tracker
+    returns the prediction (similiary score) for each pair
+    """
     FLAGS.batch_size = image_pairs.shape[1]
     is_train = tf.placeholder(tf.bool, name='is_train')
     weight_decay = 0.0005
@@ -104,7 +126,11 @@ def reid(image_pairs):
         # show_matches_score(image_pairs, predictions)
         return predictions[:, 0].reshape(1, -1)
 
+
 def show_matches_score(image_pairs, predictions):
+    """
+    shows image pair and their similarity score from the neural network
+    """
     image_pairs = np.transpose(image_pairs, (1, 0, 2, 3, 4))
     for i in xrange(image_pairs.shape[0]):
         pair = image_pairs[i, :, :, :, :]
@@ -112,7 +138,7 @@ def show_matches_score(image_pairs, predictions):
         img2 = pair[1, :, :, :]
         cv2.imshow('img1', img1)
         cv2.imshow('img2', img2)
-        print predictions[i][0]
+        print(predictions[i][0])
         cv2.waitKey(0)
 
 
