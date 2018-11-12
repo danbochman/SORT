@@ -12,49 +12,95 @@ import cv2
 from tracker_utils import bbox_to_centroid
 import random
 import colorsys
+from human_detection import DetectorAPI
 
 
 class SORT:
 
-    def __init__(self, seq=None, tracker='ReID', mode='benchmark'):
+    def __init__(self, src=None, tracker='Kalman', detector='faster-rcnn', benchmark=False):
         """
          Sets key parameters for SORT
-        :param seq: (string) relevant for 'benchmark' mode. name of folder containing sequences of images
+        :param src: path to video file
         :param tracker: (string) 'ORB', 'Kalman' or 'ReID', determines which Tracker class will be used for tracking
-        :param mode: (string) 'benchmark' or 'stream', determines what the video source will be for SORT to track
+        :param benchmark: (bool) determines whether the track will perform a test on the MOT benchmark
 
         ---- attributes ---
         detections (list) - relevant for 'benchmark' mode, data structure for holding all the detections from file
         frame_count (int) - relevant for 'benchmark' mode, frame counter, used for indexing and looping through frames
         """
-        if tracker == 'Kalman':
-            self.tracker = KalmanTracker()
-        if tracker == 'ORB':
-            self.tracker = ORBTracker()
-        if tracker == 'ReID':
-            self.tracker = ReIDTracker()
-        self.detections = None
-        self.mode = mode
-        self.seq = seq
-        if self.mode == 'benchmark':
-            # Load pre-made detections for .txt file (from MOT benchmark)
+        if tracker == 'Kalman': self.tracker = KalmanTracker()
+        elif tracker == 'ORB': self.tracker = ORBTracker()
+        elif tracker == 'ReID': self.tracker = ReIDTracker()
+
+        self.benchmark = benchmark
+        if src is not None:
+            self.src = cv2.VideoCapture(src)
+        self.detector = None
+
+        if self.benchmark:
             SORT.check_data_path()
-            file_path = 'data/%s/det.txt' % self.seq
-            self.detections = np.loadtxt(file_path, delimiter=',')
+            self.sequences = ['PETS09-S2L1', 'TUD-Campus', 'TUD-Stadtmitte', 'ETH-Bahnhof']
+            """
+            More sequences:
+            'ETH-Sunnyday', 'ETH-Pedcross2', 'KITTI-13', 'KITTI-17', 'ADL-Rundle-6', 'ADL-Rundle-8', 'Venice-2'
+            """
+            self.seq_idx = None
+            self.load_next_seq()
+
+        else:
+            if detector == 'faster-rcnn':
+                model_path = './faster_rcnn_inception_v2/frozen_inference_graph.pb'
+                self.score_threshold = 0.7  # threshold for box score from neural network
+            self.detector = DetectorAPI(path_to_ckpt=model_path)
+            self.start_tracking()
+
+    def load_next_seq(self):
+        """
+        When switching sequence - propagate the sequence index and reset the frame count
+        Load pre-made detections for .txt file (from MOT benchmark). Starts tracking on next sequence
+        """
+        if self.seq_idx == len(self.sequences) - 1:
+            print('SORT finished going over all the input sequences... closing tracker')
+            return
+
+        # Load detection from next sequence and reset the frame count for it
+        if self.seq_idx is None:
+            self.seq_idx = 0
+        else:
+            self.seq_idx += 1
         self.frame_count = 1
+
+        # Load detections for new sequence
+        file_path = 'data/%s/det.txt' % self.sequences[self.seq_idx]
+        self.detections = np.loadtxt(file_path, delimiter=',')
+
+        # reset the tracker and start tracking on new sequence
+        self.tracker.reset()
         self.start_tracking()
 
     def next_frame(self):
         """
-        Method for handling the correct way to fetch the next frame according to the 'mode' attribute applied
+        Method for handling the correct way to fetch the next frame according to the 'src' or
+         'benchmark' attribute applied
         :return: (np.ndarray) next frame, (np.ndarray) detections for that frame
         """
-        if self.mode == 'benchmark':
-            frame = SORT.show_source(self.seq, self.frame_count)
+        if self.benchmark:
+            frame = SORT.show_source(self.sequences[self.seq_idx], self.frame_count)
             new_detections = self.detections[self.detections[:, 0] == self.frame_count, 2:7]
             new_detections[:, 2:4] += new_detections[:, 0:2]  # convert to [x1,y1,w,h] to [x1,y1,x2,y2]
             self.frame_count += 1
             return frame, new_detections[:, :4]
+
+        else:
+            _, frame = self.src.read()
+            frame = cv2.resize(frame, (1280, 720))
+            boxes, scores, classes, num = self.detector.processFrame(frame)
+            # supress boxes with scores lower than threshold
+            boxes_nms = []
+            for i in xrange(len(boxes)):
+                if classes[i] == 1 and scores[i] > self.score_threshold:                 # Class 1 represents person
+                    boxes_nms.append(boxes[i])
+            return frame, boxes_nms
 
     def start_tracking(self):
         """
@@ -101,7 +147,12 @@ class SORT:
             # if the `q` key was pressed, break from the loop
             key = cv2.waitKey(1) & 0xFF
             if key == ord("q"):
-                break
+                print('SORT operation terminated by user... closing tracker')
+                return
+
+        if self.benchmark:
+            self.load_next_seq()
+
 
     @staticmethod
     def show_source(seq, frame, phase='train'):
@@ -122,12 +173,8 @@ class SORT:
 
 def main():
     """ Starts the tracker on source video. Can start multiple instances of SORT in parallel """
-    # sequences = ['PETS09-S2L1', 'TUD-Campus', 'TUD-Stadtmitte', 'ETH-Bahnhof', 'ETH-Sunnyday', 'ETH-Pedcross2',
-    #              'KITTI-13', 'KITTI-17', 'ADL-Rundle-6', 'ADL-Rundle-8', 'Venice-2']
-    sequences = ['PETS09-S2L1']
-    for seq in sequences:
-        mot_tracker = SORT(seq)
-        del mot_tracker
+    path_to_video = 'TownCentreXVID.avi'
+    mot_tracker = SORT(path_to_video)
 
 
 if __name__ == '__main__':

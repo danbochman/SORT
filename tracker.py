@@ -102,6 +102,12 @@ class Tracker:
             for col in unused_cols:
                 self.register(detections[col])
 
+    def reset(self):
+        """ resets the tracker. deletes all registered tracks. relevant for transferring the track to new video """
+        self.nextTrackID = 0
+        self.tracked = OrderedDict()
+        self.disappeared = OrderedDict()
+
     @staticmethod
     def crop_bbox_from_frame(frame, bboxes):
         """
