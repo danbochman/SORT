@@ -124,13 +124,14 @@ class SORT:
 
             # Look through each track and display it on frame (each track is a tuple (ID, [x1,y1,x2,y2])
             for ID, bbox in tracks:
+                bbox = self.verify_bbox_format(bbox)
                 # Generate pseudo-random colors for bounding boxes for each unique ID
                 random.seed(ID)
 
                 # Make sure the colors are strong and bright and draw the bounding box around the track
                 h, s, l = random.random(), 0.5 + random.random() / 2.0, 0.4 + random.random() / 5.0
                 color = [int(256 * i) for i in colorsys.hls_to_rgb(h, l, s)]
-                startX, startY, endX, endY = bbox.astype("int")
+                startX, startY, endX, endY = bbox
                 cv2.rectangle(frame, (startX, startY), (endX, endY),
                               color, 2)
 
@@ -152,6 +153,18 @@ class SORT:
 
         if self.benchmark:
             self.load_next_seq()
+
+    def verify_bbox_format(self, bbox):
+        """
+        Fixes bounding box format according to video type (e.g. benchmark test or video capture)
+        :param bbox: (array) list of bounding boxes
+        :return: (array) reformatted bounding box
+        """
+        if self.benchmark:
+            return bbox.astype("int")
+        else:
+            bbox.astype("int")
+            return [bbox[1], bbox[0], bbox[3], bbox[2]]
 
 
     @staticmethod
