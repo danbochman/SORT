@@ -1,11 +1,6 @@
-# Code adapted from Tensorflow Object Detection Framework
-# https://github.com/tensorflow/models/blob/master/research/object_detection/object_detection_tutorial.ipynb
-# Tensorflow Object Detection Detector
-
 import numpy as np
 import tensorflow as tf
 import cv2
-import time
 
 
 class DetectorAPI:
@@ -32,7 +27,6 @@ class DetectorAPI:
         self.detection_scores = self.detection_graph.get_tensor_by_name('detection_scores:0')
         self.detection_classes = self.detection_graph.get_tensor_by_name('detection_classes:0')
         self.num_detections = self.detection_graph.get_tensor_by_name('num_detections:0')
-
 
     def processFrame(self, image):
         # Expand dimensions since the trained_model expects images to have shape: [1, None, None, 3]
@@ -70,7 +64,6 @@ if __name__ == "__main__":
         boxes, scores, classes, num = odapi.processFrame(img)
 
         # Visualization of the results of a detection.
-
         for i in range(len(boxes)):
             # Class 1 represents human
             if classes[i] == 1 and scores[i] > threshold:
