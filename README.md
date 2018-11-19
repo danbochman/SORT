@@ -19,7 +19,7 @@ track.py
 Each individual detection is assigned to a Track object and registered by the tracker. The Track is an improved state estimator which utilizes a Kalman Filter to give more robust predictions to where each individual tracked object is expected to be between consecutive frames 
 
 
-Open source reference works which contributed in the creation of this repository
+Open source references which contributed to the creation of this repository
 --------------------------------------------------------------------------
 A simple online and realtime tracking algorithm for 2D multiple object tracking in video sequences. By Alex Bewley
 https://github.com/abewley/sort
