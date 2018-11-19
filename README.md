@@ -1,6 +1,6 @@
 # SORT
 
-This repository is meant to perform as a modular and flexible SORT (Simple Online Real-Time Tracking) algorithm
+This repository is meant to perform as a modular and flexible SORT (Simple Online Real-Time Tracking) algorithm.
 The project is highly object oriented for easy future customization in mind.
 
 The SORT cores:
