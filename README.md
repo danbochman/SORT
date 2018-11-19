@@ -3,7 +3,7 @@
 This repository is meant to perform as a modular and flexible SORT (Simple Online Real-Time Tracking) implementation.
 
 
-Very useful reference works that helped in the creation of this repository
+Very useful reference works which helped in the creation of this repository
 --------------------------------------------------------------------------
 A simple online and realtime tracking algorithm for 2D multiple object tracking in video sequences. By Alex Bewley
 https://github.com/abewley/sort
